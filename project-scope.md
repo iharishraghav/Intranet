@@ -15,9 +15,9 @@ Build an internal organizational web application that allows employees to view a
 - View quick links
 - View upcoming employee birthdays
 - Daily mood check-in (emoji-based, one submission per day per employee)
-  - Anonymous and aggregate only — individual submissions are not visible to anyone, including Admin/Superadmin
-- Organization-restricted (superadmin or admin-only) user management
-- Add, edit, delete: announcements, events, blogs, employee records, resources, and quick links (superadmin or admin-only)
+  - Anonymous and aggregate only — individual submissions are not visible to anyone, including Admin
+- Organization-restricted (admin-only) user management
+- Add, edit, delete: announcements, events, blogs, employee records, resources, and quick links (admin-only)
 
 # Authentication
 
@@ -27,4 +27,3 @@ Build an internal organizational web application that allows employees to view a
 
 - User
 - Admin
-- Superadmin — same permissions as Admin, plus a set of superadmin-only features (TBD)

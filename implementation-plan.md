@@ -61,9 +61,9 @@ No dependencies. Must finish before any other phase starts.
 
 1. Implement Zoho SSO login flow (OAuth2 redirect → callback → token exchange)
 2. Create session/JWT handling on the backend
-3. Implement `User` / `Admin` / `Superadmin` role model + middleware for role-based route protection (single reusable `requireRole()` middleware, so Superadmin-only checks can be added later without rework)
+3. Implement `User` / `Admin` role model + middleware for role-based route protection (single reusable `requireRole()` middleware)
 4. Build basic authenticated shell (logged-in layout, logout)
-5. Seed initial Superadmin account
+5. Seed initial Admin account
 
 **Exit criteria:** a user can log in via Zoho SSO, land on an authenticated shell, and log out; a protected test route correctly rejects the wrong role.
 
@@ -77,11 +77,10 @@ No dependencies. Must finish before any other phase starts.
 
 1. Design and migrate schema for: announcements, events, blogs, resources, quick links
    - Every entity gets an end-date field + manual status field (e.g. `Archived`) to support active/inactive filtering
-2. Backend CRUD API endpoints per entity, create/edit/delete gated by `requireRole(['Admin', 'Superadmin'])`
+2. Backend CRUD API endpoints per entity, create/edit/delete gated by `requireRole(['Admin'])`
 3. Admin UI: list/create/edit/delete screens per entity
-4. Wire the open Superadmin-only decision as a single extension point in `requireRole()` (e.g. `requireRole(['Superadmin'])` on specific routes) so it can be applied later without refactoring — do not build speculative UI for it until the feature list is confirmed
 
-**Exit criteria:** Admin/Superadmin can create, edit, delete, and archive each of the five entities through the admin UI; User role is correctly blocked from all mutation endpoints.
+**Exit criteria:** Admin can create, edit, delete, and archive each of the five entities through the admin UI; User role is correctly blocked from all mutation endpoints.
 
 ---
 
@@ -90,11 +89,11 @@ No dependencies. Must finish before any other phase starts.
 **Depends on:** Phase 2 (reuses the same CRUD pattern established there).
 **Blocks:** Phase 4 (birthday widget reads this data).
 
-1. Build employee record CRUD, gated by `requireRole(['Admin', 'Superadmin'])` — same permission level as Phase 2 entities
+1. Build employee record CRUD, gated by `requireRole(['Admin'])` — same permission level as Phase 2 entities
 2. Manual data entry only (confirmed — no external HR system integration)
 3. Implement "upcoming birthdays" query (next 30 days) and expose as an API endpoint
 
-**Exit criteria:** Admin/Superadmin can manage employee records; birthdays endpoint returns the correct next-30-days set.
+**Exit criteria:** Admin can manage employee records; birthdays endpoint returns the correct next-30-days set.
 
 ---
 
@@ -118,14 +117,14 @@ No dependencies. Must finish before any other phase starts.
 ## Phase 5 — Mood Check-In
 
 **Depends on:** Phase 1 only (needs an authenticated employee identity). Independent of Phase 2/3/4 — can be built in parallel by a separate engineer/track once Phase 1 ships.
-**Confirmed constraint:** submissions are anonymous/aggregate only — never linked to an identifiable employee, including for Admin/Superadmin. Enforce this at the schema level (do not store a user↔submission foreign key in a queryable form; e.g. hash+discard the identity after the one-per-day check, or use a separate write-once "already submitted today" record disjoint from the mood value table).
+**Confirmed constraint:** submissions are anonymous/aggregate only — never linked to an identifiable employee, including for Admin. Enforce this at the schema level (do not store a user↔submission foreign key in a queryable form; e.g. hash+discard the identity after the one-per-day check, or use a separate write-once "already submitted today" record disjoint from the mood value table).
 
 1. Backend: daily mood submission endpoint (emoji-based), enforce one submission per employee per day without persisting a queryable identity-to-submission link
 2. Aggregate endpoint: org-wide mood trend (daily/weekly emoji distribution)
 3. Frontend: emoji check-in widget on dashboard
-4. Frontend: aggregate mood trend view, visible to Admin/Superadmin only
+4. Frontend: aggregate mood trend view, visible to Admin only
 
-**Exit criteria:** an employee can submit one mood per day; a second same-day submission is rejected; Admin/Superadmin can view aggregate trends only, with no path to any individual's submission (verify this explicitly in Phase 7's access-control tests).
+**Exit criteria:** an employee can submit one mood per day; a second same-day submission is rejected; Admin can view aggregate trends only, with no path to any individual's submission (verify this explicitly in Phase 7's access-control tests).
 
 ---
 
