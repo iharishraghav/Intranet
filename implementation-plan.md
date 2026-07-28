@@ -47,7 +47,7 @@ No dependencies. Must finish before any other phase starts.
 4. Set up environment config/secrets management (Azure App Service configuration / Key Vault)
 5. Set up CI/CD pipeline (build, test, deploy to Azure)
 6. Register app with Zoho for SSO (OAuth client ID/secret) and Zoho Calendar API access
-7. Choose and configure migrations tool (Prisma or Knex)
+7. Choose and configure migrations tool (Prisma)
 8. Define initial database schema: `users`, `roles` — this is a hard dependency for Phase 1
 
 **Exit criteria:** empty client/server apps deploy successfully through CI/CD to an Azure dev environment; migrations run against the provisioned database.
