@@ -1,37 +1,29 @@
 # Implementation Plan
 
-Based on [project-scope.md](./project-scope.md) and [teck-stack.md](./teck-stack.md).
+Based on [project-scope.md](./project-scope.md) and [tech-stack.md](./tech-stack.md).
 
 ## Dependency overview
 
-```
-Phase 0 (Infra)
-   │
-   ▼
-Phase 1 (Auth & Roles) ──────────────┐
-   │                                 │
-   ▼                                 ▼
-Phase 2 (Core CRUD: announcements,   Phase 5 (Mood check-in)
- events, blogs, resources, links)     — independent content model,
-   │                                    only needs an authenticated
-   ▼                                    user identity from Phase 1
-Phase 3 (Employee directory &
- birthdays)
-   │
-   ▼
-Phase 4 (Employee-facing views) ← reads from Phase 2 + Phase 3 APIs
-   │
-   ▼
-Phase 6 (Auto-expiry automation) ← needs Phase 2's end-date/status fields
-   │
-   ▼
-Phase 7 (Polish, testing, hardening) ← needs all features functionally complete
-   │
-   ▼
-Phase 8 (Launch)
+```mermaid
+graph TD
+    P0["Phase 0 — Infra"] --> P1["Phase 1 — Auth &amp; Roles"]
+    P1 --> P2["Phase 2 — Core CRUD"]
+    P1 --> P3["Phase 3 — Employee directory &amp; birthdays"]
+    P1 --> P5["Phase 5 — Mood check-in"]
+    P2 --> P4["Phase 4 — Employee-facing views"]
+    P3 --> P4
+    P2 --> P6["Phase 6 — Auto-expiry automation"]
+    P4 --> P7["Phase 7 — Polish, testing, hardening"]
+    P5 --> P7
+    P6 --> P7
+    P7 --> P8["Phase 8 — Launch"]
 ```
 
-Phase 5 only depends on Phase 1 (needs a logged-in employee identity to enforce "one submission per day"), so it can be built in parallel with Phases 2–4 by a second engineer/track once Phase 1 ships.
+Three tracks can run in parallel once Phase 1 ships:
+
+- **Phase 5** only needs a logged-in employee identity (to enforce "one submission per day"), so a second engineer can build it alongside Phases 2–4.
+- **Phase 3** only hard-depends on Phase 1. It reuses the CRUD pattern established in Phase 2, but that is a convention dependency, not a technical one — once the pattern exists, Phase 3 can proceed alongside the rest of Phase 2.
+- **Phase 6** only needs Phase 2's end-date/status fields to exist. It does **not** depend on Phase 4, so auto-expiry can be built as soon as the Phase 2 schema lands.
 
 Within Phase 2 and Phase 4, each entity (announcements / events / blogs / resources / quick links) is independent of the others — they can be split across engineers and built in parallel once the shared pattern (schema → API → admin UI → public view) is proven on the first entity.
 
@@ -42,51 +34,58 @@ Within Phase 2 and Phase 4, each entity (announcements / events / blogs / resour
 No dependencies. Must finish before any other phase starts.
 
 1. Set up monorepo structure (`client/` React, `server/` Express)
-2. Configure TypeScript, ESLint, Prettier for both client and server
-3. Provision Azure resources: App Service (frontend + backend), Azure Database for PostgreSQL, Blob Storage container
-4. Set up environment config/secrets management (Azure App Service configuration / Key Vault)
-5. Set up CI/CD pipeline (build, test, deploy to Azure)
-6. Register app with Zoho for SSO (OAuth client ID/secret) and Zoho Calendar API access
-7. Choose and configure migrations tool (Prisma)
-8. Define initial database schema: `users`, `roles` — this is a hard dependency for Phase 1
+2. Configure TypeScript, oxlint, and Prettier for both client and server
+3. Choose and configure the test framework (unit/integration runner + E2E tool) — the pipeline's `test` step and all of Phase 7 depend on this existing
+4. Define the environment set (`dev`, `production`, and whether a staging tier is needed)
+5. Provision Azure resources per environment: App Service (frontend + backend), Azure Database for PostgreSQL, Blob Storage container
+6. Set up environment config/secrets management (Azure App Service configuration / Key Vault)
+7. Enable application-level logging and monitoring (e.g. Application Insights) — Phase 6.2 covers only the scheduled job, not the app
+8. Configure backup and retention policy for PostgreSQL and Blob Storage
+9. Choose the CI/CD platform (GitHub Actions vs. Azure DevOps Pipelines) and set up the pipeline (build, lint, test, deploy to Azure)
+10. Register app with Zoho for SSO (OAuth client ID/secret). Register for Zoho Calendar API access **only if** the Add-to-Calendar decision resolves to the API rather than a deep link (see Phase 4.3)
+11. Choose and configure migrations tool (Prisma)
+12. Define initial database schema: `users`, `roles` — this is a hard dependency for Phase 1
 
-**Exit criteria:** empty client/server apps deploy successfully through CI/CD to an Azure dev environment; migrations run against the provisioned database.
+**Exit criteria:** empty client/server apps deploy successfully through CI/CD to the Azure dev environment; the pipeline's lint and test steps run and gate the build; migrations run against the provisioned database.
 
 ---
 
 ## Phase 1 — Authentication & Roles
 
 **Depends on:** Phase 0 (Azure resources, `users`/`roles` schema, Zoho OAuth credentials).
-**Blocks:** Phase 2, Phase 5 (any endpoint needing a logged-in user). Phase 3/4/6 inherit this transitively through Phase 2.
+**Blocks:** Phase 2, Phase 3, Phase 5 (any endpoint needing a logged-in user). Phase 4 and Phase 6 inherit this transitively.
 
 1. Implement Zoho SSO login flow (OAuth2 redirect → callback → token exchange)
-2. Create session/JWT handling on the backend
-3. Implement `User` / `Admin` role model + middleware for role-based route protection (single reusable `requireRole()` middleware)
-4. Build basic authenticated shell (logged-in layout, logout)
-5. Seed initial Admin account
+2. Enforce the organization restriction: reject any authenticated identity outside the organization's Zoho domain/org ID. Zoho SSO on its own authenticates _any_ Zoho account, so this check — not the login flow — is the app's outer security boundary
+3. Create session handling on the backend (resolve the session vs. JWT decision first — see [tech-stack.md](./tech-stack.md))
+4. Implement `User` / `Admin` role model + middleware for role-based route protection (single reusable `requireRole()` middleware)
+5. Build basic authenticated shell (logged-in layout, logout)
+6. Seed initial Admin account
 
-**Exit criteria:** a user can log in via Zoho SSO, land on an authenticated shell, and log out; a protected test route correctly rejects the wrong role.
+**Exit criteria:** a user can log in via Zoho SSO, land on an authenticated shell, and log out; an account outside the organization is rejected at the callback; a protected test route correctly rejects the wrong role.
 
 ---
 
 ## Phase 2 — Core Data Models & Admin CRUD
 
 **Depends on:** Phase 1 (role middleware).
-**Blocks:** Phase 3 (reuses this pattern), Phase 4 (reads this data), Phase 6 (reads the end-date/status fields added here).
+**Blocks:** Phase 4 (reads this data), Phase 6 (reads the end-date/status fields added here). Phase 3 reuses this phase's CRUD pattern but is not technically blocked by it.
 **Internal parallelism:** announcements, events, blogs, resources, and quick links are independent of each other. Build the full vertical slice (schema → API → admin UI) for **announcements first** as the reference implementation, then parallelize the rest across engineers.
 
 1. Design and migrate schema for: announcements, events, blogs, resources, quick links
-   - Every entity gets an end-date field + manual status field (e.g. `Archived`) to support active/inactive filtering
+   - Announcements, events, and blogs get an end-date field — these are the three entities Phase 6 auto-expires
+   - All five get a manual status field (e.g. `Archived`) to support active/inactive filtering
 2. Backend CRUD API endpoints per entity, create/edit/delete gated by `requireRole(['Admin'])`
 3. Admin UI: list/create/edit/delete screens per entity
+4. Admin user management: list users, grant/revoke the Admin role, and deactivate leavers — this satisfies the "admin-only user management" line in [project-scope.md](./project-scope.md), which no other phase covers. Reuses this phase's admin UI pattern against the `users`/`roles` tables from Phase 0.12
 
-**Exit criteria:** Admin can create, edit, delete, and archive each of the five entities through the admin UI; User role is correctly blocked from all mutation endpoints.
+**Exit criteria:** Admin can create, edit, delete, and archive each of the five entities through the admin UI, and can change another user's role; User role is correctly blocked from all mutation endpoints.
 
 ---
 
 ## Phase 3 — Employee Directory & Birthdays
 
-**Depends on:** Phase 2 (reuses the same CRUD pattern established there).
+**Depends on:** Phase 1 (role middleware). It reuses the CRUD pattern established in Phase 2, but that is a convention dependency rather than a technical one — once the pattern exists, this phase can run alongside the rest of Phase 2.
 **Blocks:** Phase 4 (birthday widget reads this data).
 
 1. Build employee record CRUD, gated by `requireRole(['Admin'])` — same permission level as Phase 2 entities
@@ -105,7 +104,7 @@ No dependencies. Must finish before any other phase starts.
 
 1. Home/dashboard page assembling: active announcements, active events, upcoming birthdays, quick links, resources
 2. Announcements list/detail view
-3. Events list/detail view with **Add to Calendar** button — resolve the open decision (deep link vs. Zoho Calendar API) before starting this item specifically
+3. Events list/detail view with **Add to Calendar** button — resolve the deep link vs. Zoho Calendar API decision before starting this item specifically. Note that [project-scope.md](./project-scope.md) describes the button as _redirecting_ to Zoho Calendar, which points to a deep link; confirm this before Phase 0.10 registers for Calendar API access
 4. Blogs list/detail view
 5. Resources list view (file download from Blob Storage)
 6. Quick links list view
@@ -130,7 +129,7 @@ No dependencies. Must finish before any other phase starts.
 
 ## Phase 6 — Automation & Scheduled Jobs
 
-**Depends on:** Phase 2 (end-date/status fields must exist on announcements/events/blogs).
+**Depends on:** Phase 2 (end-date/status fields must exist on announcements/events/blogs). Does **not** depend on Phase 4 — this can start as soon as the Phase 2 schema lands.
 
 1. Build Azure Function (timer trigger) for auto-expiry: flip announcements/events/blogs out of "active" once end date passes
 2. Add logging/monitoring for the scheduled job
@@ -148,7 +147,8 @@ No dependencies. Must finish before any other phase starts.
 3. Access control tests: role boundaries generally, plus explicit verification that no individual mood submission is ever retrievable by any role
 4. End-to-end tests for critical flows: login, add announcement, add-to-calendar, mood check-in
 5. File upload size/type validation for resources
-6. Security review (auth flows, file upload handling, SQL injection/XSS checks)
+6. Security review (auth flows, organization-restriction enforcement, file upload handling, SQL injection/XSS checks)
+7. Enable dependency and secret scanning in the CI pipeline
 
 **Exit criteria:** test suite green; security review sign-off; manual pass on mobile viewport for all employee-facing views.
 
