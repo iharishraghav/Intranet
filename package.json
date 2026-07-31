@@ -1,0 +1,15 @@
+{
+  "name": "intranet",
+  "private": true,
+  "type": "module",
+  "description": "Repo-root tooling only (git hooks, commit linting). Application code lives in client/ and server/, which are installed independently.",
+  "scripts": {
+    "prepare": "husky",
+    "commitlint": "commitlint --edit"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^21.2.1",
+    "@commitlint/config-conventional": "^21.2.0",
+    "husky": "^9.1.7"
+  }
+}
