@@ -9,3 +9,6 @@ build/
 .env
 .env.*
 !.env.example
+
+# Prisma generated client (recreated by `npm run db:generate`)
+server/src/generated/

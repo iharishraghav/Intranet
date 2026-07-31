@@ -1,0 +1,15 @@
+// Prisma schema for the intranet database.
+// Docs: https://pris.ly/d/prisma-schema
+//
+// Domain models (announcements, events, blogs, employees, resources, quick links)
+// land in Phase 2 of docs/implementation-plan.md. This file currently establishes
+// the datasource and client generation only.
+
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}

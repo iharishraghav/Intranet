@@ -36,4 +36,5 @@
     /* Performance */
     "skipLibCheck": true
   },
+  "include": ["src"],
 }
