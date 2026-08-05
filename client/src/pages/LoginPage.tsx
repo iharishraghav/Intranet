@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { Navigate, useSearchParams } from 'react-router'
 
-import { signIn, useSession } from '../lib/auth-client'
-import './LoginPage.css'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card'
+import { signIn, useSession } from '@/lib/auth-client'
 
 type SignInState =
   | { state: 'idle' }
@@ -40,28 +41,35 @@ function LoginPage() {
   }
 
   return (
-    <main className="login">
-      <h1>Intranet</h1>
-      <p className="login-tagline">
-        Internal web application for organization-wide communication.
-      </p>
+    <main className="flex min-h-screen items-center justify-center p-6">
+      <Card className="w-full max-w-sm [--card-spacing:--spacing(6)]">
+        <CardHeader className="text-center">
+          <h1 className="font-heading text-2xl leading-snug font-semibold tracking-tight">
+            Intranet
+          </h1>
+          <CardDescription>
+            Internal web application for organization-wide communication.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <Button
+            size="lg"
+            className="w-full"
+            onClick={() => void handleSignIn()}
+            disabled={isPending || signInState.state === 'redirecting'}
+          >
+            {signInState.state === 'redirecting'
+              ? 'Redirecting…'
+              : 'Sign in with Zoho'}
+          </Button>
 
-      <button
-        type="button"
-        className="login-button"
-        onClick={() => void handleSignIn()}
-        disabled={isPending || signInState.state === 'redirecting'}
-      >
-        {signInState.state === 'redirecting'
-          ? 'Redirecting…'
-          : 'Sign in with Zoho'}
-      </button>
-
-      {message && (
-        <p className="login-error" role="alert">
-          {message}
-        </p>
-      )}
+          {message && (
+            <p className="text-center text-sm text-destructive" role="alert">
+              {message}
+            </p>
+          )}
+        </CardContent>
+      </Card>
     </main>
   )
 }

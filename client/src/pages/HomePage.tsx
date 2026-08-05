@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 
-import { useSession } from '../lib/auth-client'
-import './HomePage.css'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { useSession } from '@/lib/auth-client'
 
 type ApiStatus =
   | { state: 'checking' }
@@ -43,24 +43,34 @@ function HomePage() {
 
   return (
     <>
-      <h1>Welcome, {session?.user.name}</h1>
-      <p className="tagline">
+      <h1 className="font-heading text-3xl leading-tight font-semibold tracking-tight">
+        Welcome, {session?.user.name}
+      </h1>
+      <p className="mt-2 text-muted-foreground">
         Internal web application for organization-wide communication.
       </p>
 
-      <section className="status" aria-live="polite">
-        <h2>API connection</h2>
-        {status.state === 'checking' && <p>Checking&hellip;</p>}
-        {status.state === 'ok' && (
-          <p className="status-ok">Connected &mdash; server status: {status.status}</p>
-        )}
-        {status.state === 'error' && (
-          <p className="status-error">
-            Not connected &mdash; {status.message}. Is the server running on port
-            3000?
-          </p>
-        )}
-      </section>
+      <Card className="mt-8" aria-live="polite">
+        <CardHeader>
+          <h2 className="font-heading text-base leading-snug font-medium">API connection</h2>
+        </CardHeader>
+        <CardContent>
+          {status.state === 'checking' && (
+            <p className="text-muted-foreground">Checking&hellip;</p>
+          )}
+          {status.state === 'ok' && (
+            <p className="text-emerald-600 dark:text-emerald-400">
+              Connected &mdash; server status: {status.status}
+            </p>
+          )}
+          {status.state === 'error' && (
+            <p className="text-destructive">
+              Not connected &mdash; {status.message}. Is the server running on port
+              3000?
+            </p>
+          )}
+        </CardContent>
+      </Card>
     </>
   )
 }

@@ -1,13 +1,12 @@
 import { Outlet } from 'react-router'
 
 import NavBar from './NavBar'
-import './AppLayout.css'
 
 function AppLayout() {
   return (
     <>
       <NavBar />
-      <main className="app">
+      <main className="mx-auto max-w-5xl px-6 py-8">
         <Outlet />
       </main>
     </>
