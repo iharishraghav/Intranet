@@ -1,0 +1,48 @@
+.navbar {
+  border-bottom: 1px solid var(--border);
+}
+
+.navbar-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  max-width: 60rem;
+  margin: 0 auto;
+  padding: 0.875rem 1.5rem;
+}
+
+.navbar-brand {
+  color: var(--text-h);
+  font-weight: 600;
+}
+
+.navbar-user {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+}
+
+.navbar-name {
+  font-size: 0.875rem;
+}
+
+.navbar-signout {
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--text);
+  background: none;
+  cursor: pointer;
+}
+
+.navbar-signout:hover:not(:disabled) {
+  color: var(--text-h);
+}
+
+.navbar-signout:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
