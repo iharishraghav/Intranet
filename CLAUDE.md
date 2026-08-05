@@ -25,16 +25,20 @@ CRUD over every entity. Auth is Zoho SSO, domain-restricted.
 Read [docs/project-scope.md](./docs/project-scope.md) for the feature set,
 [docs/tech-stack.md](./docs/tech-stack.md) for the chosen stack, and
 [docs/implementation-plan.md](./docs/implementation-plan.md) for the phased build order. The plan is
-the source of truth for what comes next — the repo is currently at the tail of Phase 0.
+the source of truth for what comes next — Phase 0 is done and Phase 1 (Zoho SSO + roles) is next.
 
-Target stack per `tech-stack.md`, most of it not yet wired up: Prisma for schema/migrations, Azure App
-Service + Azure Database for PostgreSQL, Azure Blob Storage for resource files, and an Azure Function
-(timer trigger) for auto-expiring announcements/events.
+Target stack per `tech-stack.md`. Prisma and PostgreSQL are wired up; still not started: Azure App
+Service hosting, Azure Database for PostgreSQL, Azure Blob Storage for resource files, and an Azure
+Function (timer trigger) for auto-expiring announcements/events.
 
 ## Current state
 
-Only a health-check vertical slice exists: `GET /api/health` on the server, and an `App.tsx` that
-fetches it to show connection status. No database, no auth, no domain models, no tests.
+A health-check vertical slice — `GET /api/health` on the server and an `App.tsx` that fetches it to
+show connection status — plus a Prisma datasource pointed at a local PostgreSQL `intranet` database.
+No auth, no domain models, no migrations, no tests.
+
+`prisma/schema.prisma` deliberately declares **only** the generator and datasource. Domain models are
+Phase 2, so there is no `prisma/migrations/` directory yet and `db:migrate` has never been run.
 
 This is not an npm-workspaces monorepo. The root `package.json` is **tooling-only** — Husky and
 commitlint, no `workspaces` field and no root dev/build scripts. `client/` and `server/` each have
@@ -68,13 +72,21 @@ messages will go through unchecked.
 
 **server/**
 
-| Command            | Description                                     |
-| ------------------ | ----------------------------------------------- |
-| `npm run dev`      | `tsx watch src/index.ts`, reloads on change     |
-| `npx tsc --noEmit` | Typecheck (the config is `noEmit`, so `tsc` alone does the same) |
+| Command               | Description                                     |
+| --------------------- | ----------------------------------------------- |
+| `npm run dev`         | `tsx watch src/index.ts`, reloads on change     |
+| `npx tsc --noEmit`    | Typecheck (the config is `noEmit`, so `tsc` alone does the same) |
+| `npm run db:generate` | `prisma generate` — writes the client to `src/generated/prisma` (gitignored) |
+| `npm run db:migrate`  | `prisma migrate dev` — create and apply a migration |
+| `npm run db:studio`   | `prisma studio` — browse the database in a GUI  |
 
 Both sides must be running for the client to reach the API. Copy `server/.env.example` to
-`server/.env` before starting the server.
+`server/.env` and fill in `DATABASE_URL` before starting the server.
+
+`npm install` does **not** generate the Prisma client — the `@prisma/engines` postinstall script is
+blocked by npm's `allowScripts` policy and there is no `postinstall` hook. Run `npm run db:generate`
+after cloning and after any schema change, otherwise `src/generated/prisma` is missing and the server
+fails to start.
 
 No test runner is configured. Testing lands in Phase 6 of the implementation plan; pick and wire up a
 runner when you get there rather than assuming one exists.
