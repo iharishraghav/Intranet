@@ -1,40 +1,41 @@
 {
   "compilerOptions": {
-    /* Language & Runtime */
+    // Runtime & Language
+    "target": "ESNext",
     "lib": ["ESNext"],
-    "target": "esnext",
     "types": ["node"],
 
-    /* Module System */
+    // Modules & Module Resolution
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "verbatimModuleSyntax": true,
+    "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
-    "esModuleInterop": true,
 
-    /* Output */
-    "rootDir": "./src",
-    "outDir": "./dist",
+    // Type Checking
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noPropertyAccessFromIndexSignature": false,
+
+    // Code Quality
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
+
+    // Library & Module Interoperability
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+
+    // Build / Output
+    "noEmit": true,
     "sourceMap": true,
     "declaration": false,
 
-    /* Type Checking */
-    "strict": true,
-    "exactOptionalPropertyTypes": true,
-    "noUncheckedIndexedAccess": true,
-    "noImplicitOverride": true,
-    "noImplicitReturns": true,
-    "noFallthroughCasesInSwitch": true,
-    "noPropertyAccessFromIndexSignature": false,
-    "useUnknownInCatchVariables": true,
-
-    /* Code Quality */
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "forceConsistentCasingInFileNames": true,
-
-    /* Performance */
-    "skipLibCheck": true
-  },
-  "include": ["src"],
+    // Path Aliases
+    "paths": {
+      "src/*": ["./src/*"]
+    }
+  }
 }
