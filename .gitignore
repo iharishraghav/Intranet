@@ -9,6 +9,12 @@ build/
 .env
 .env.*
 !.env.example
+!.env.test.example
 
 # Prisma generated client (recreated by `npm run db:generate`)
 server/src/generated/
+
+# Playwright
+e2e/test-results/
+e2e/playwright-report/
+playwright/.cache/
