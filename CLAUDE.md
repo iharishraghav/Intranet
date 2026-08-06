@@ -35,14 +35,19 @@ Function (timer trigger) for auto-expiring announcements/events.
 
 ## Current state
 
-An authenticated shell around a health-check vertical slice: `GET /api/health` on the server, a
-`HomePage.tsx` that queries it to show connection status, and Better Auth mounted at `/api/auth/*`
-against a local PostgreSQL `intranet` database. No domain models and no tests.
+An authenticated shell around a health-check vertical slice: `GET /api/health` on the server, an
+`ApiStatus.tsx` that queries it and renders a dot-and-label in the nav bar, and Better Auth mounted
+at `/api/auth/*` against a local PostgreSQL `intranet` database. No domain models. Playwright is
+wired up in `e2e/` against a separate `intranet_test` database, but no tests are written yet.
+
+`ApiStatus` is deliberately not on every page: `NavBar.tsx` renders it only when the session is an
+admin *and* the current path is `/admin`. It is an operator diagnostic, not something to show staff,
+so don't promote it back to `HomePage` — which is now just a greeting off `useSession()`.
 
 The client data layer is already the one Phase 2 will build on, even though only the health check
 uses it: axios (`src/lib/api.ts`) under TanStack Query (`src/lib/query-client.ts`) for anything from
-the API, Zustand (`src/stores/`) for everything else, and `core/` for messages and the request/
-response contract. See Architecture for all three.
+the API, Zustand (`src/stores/`) for everything else, and `core/` for messages, shared constants and
+the request/response contract. See Architecture for all three.
 
 `prisma/schema.prisma` holds the generator, datasource, the four Better Auth models
 (`User`/`Session`/`Account`/`Verification`) and a `Role` enum. Domain models are still Phase 2. One
@@ -65,18 +70,19 @@ client mirrors it: `LoginPage.tsx` renders one fixed access-denied message for a
 callback and never surfaces the provider's reason.
 
 Every server env var goes through a Zod schema in `src/lib/env.ts`, which imports `dotenv/config`
-itself — so modules like `db.ts` and `email-domain.ts` no longer depend on the entry point having
-loaded dotenv first. `env` is parsed at import time and throws with every problem listed at once
-(`z.prettifyError`), not just the first. Read config through `env`, never `process.env`: the values
+itself — so modules like `src/db.ts` and `src/lib/email-domain.ts` no longer depend on the entry
+point having loaded dotenv first. `env` is parsed at import time and throws with every problem listed
+at once (`z.prettifyError`), not just the first. Read config through `env`, never `process.env`: the values
 come out typed and already normalized — `PORT` is a number with a 3000 default, and
 `ALLOWED_EMAIL_DOMAIN` is a single lowercased domain string.
 
 Two details in that schema are easy to undo by accident:
 
-- `PORT` is wrapped in a `z.preprocess` that maps `''` to `undefined`. A variable that is present but
-  blank (`PORT=` in `.env`) is an empty string, not a missing key, so without it `z.coerce` turns
-  `PORT=` into `0` and `.positive()` fails instead of the `3000` default applying. Any future
-  optional variable with a default needs the same treatment.
+- `PORT` and `NODE_ENV` are each wrapped in a `z.preprocess` that maps `''` to `undefined`. A
+  variable that is present but blank (`PORT=` in `.env`) is an empty string, not a missing key, so
+  without it `z.coerce` turns `PORT=` into `0` and `.positive()` fails instead of the `3000` default
+  applying — and a blank `NODE_ENV` fails the `enum` instead of defaulting to `development`. Any
+  future optional variable with a default needs the same treatment.
 - The URL variables are scheme-constrained rather than bare `z.url()`, which accepts any scheme:
   `DATABASE_URL` must be `postgres`/`postgresql`, `BETTER_AUTH_URL` and `ZOHO_ACCOUNTS_URL` must be
   `http`/`https`. That is what makes a value swapped into the wrong variable fail at boot with a
@@ -85,6 +91,19 @@ Two details in that schema are easy to undo by accident:
 Seed-only variables are deliberately **not** in that schema. `prisma/seed.ts` declares its own
 `seedEnvSchema` and parses it inside `seedAdmin()`, so the API does not refuse to boot over
 `SEED_ADMIN_*` it never reads. Keep new seed-only variables there, not in `src/lib/env.ts`.
+
+`NODE_ENV` is the switch two things read: `src/index.ts` sets `trust proxy` on it (needed once Azure
+App Service terminates TLS in front of Express, so the client IP is the real one), and
+`src/middleware/rate-limit.ts` turns rate limiting on. Below `production` both limiters are a
+pass-through `next()` — dev reloads and the e2e run would otherwise trip them — so a limit you add
+is untested until something runs with `NODE_ENV=production`. `authRateLimit` (20 requests per 15
+minutes) is mounted on `/api/auth` and `apiRateLimit` (300) on `/api`, both from
+`express-rate-limit`; where they sit in the chain matters, see Architecture.
+
+`src/db.ts` builds `PrismaClient` on the `@prisma/adapter-pg` driver adapter, not a plain connection
+string, so the connection URL comes from `env.DATABASE_URL` rather than from the schema's
+`datasource` block. That is also why `prisma.config.ts` has to pass `datasource.url` explicitly for
+the CLI.
 
 `src/middleware/require-auth.ts` and `require-admin.ts` export `requireAuth`/`requireAdmin`
 (`requireAdmin` delegates to `requireAuth`, then checks `Role.Admin`). Both are written for Phase 2
@@ -98,7 +117,10 @@ On the client, `src/lib/auth-client.ts` builds the `better-auth/react` client wi
 routes only. `ProtectedRoute` renders
 `AppLayout` (nav bar + `<Outlet />`) when a session exists, redirects to `/login` when not, and
 renders a loading line while `isPending` — do not skip that third branch or the first paint bounces
-authenticated users to the login page.
+authenticated users to the login page. `AdminRoute` nests inside it and repeats the same three
+branches against `session.user.role`, redirecting non-admins to `/` — it must keep its own
+`isPending` branch for the same reason, and it is client-side convenience only. The real check is
+`requireAdmin` on the server; never let a route guard stand in for it.
 
 `@better-auth/cli` is deliberately **not** a dependency: it pins `better-auth@1.4.21` and an old
 `drizzle-orm`, which pull 8 advisories into the tree. The schema is maintained by hand; if you ever
@@ -106,14 +128,13 @@ need to regenerate it, use `npx @better-auth/cli@latest generate --config src/li
 throwaway shell and diff the result.
 
 This is not an npm-workspaces monorepo. The root `package.json` is **tooling-only** — Husky and
-commitlint, no `workspaces` field and no root dev/build scripts. `client/` and `server/` each have
-their own `package.json` and `package-lock.json` and are installed independently. `core/` is the one
-exception to that split: shared TypeScript source compiled into both programs, with no `package.json`
-and no dependencies of its own — see the `core/` section under Architecture.
+commitlint, no `workspaces` field and no root dev/build scripts. `client/`, `server/` and `e2e/` each
+have their own `package.json` and `package-lock.json` and are installed independently. `core/` is the
+one exception to that split: shared TypeScript source compiled into both programs, with no
+`package.json` and no dependencies of its own — see the `core/` section under Architecture.
 
-Note that `server/package.json` still declares `"main": "dist/index.js"`, but `server/tsconfig.json`
-sets `noEmit: true`, so nothing is ever emitted to `dist/`. Either wire up a real build or drop the
-`main` field before relying on it.
+`server/package.json` declares `"main": "dist/index.js"`, but `server/tsconfig.json` is `noEmit`, so
+`dist/` is never written. Wire up a real build or drop the field before relying on it.
 
 ## Commands
 
@@ -144,24 +165,31 @@ messages will go through unchecked.
 | `npm run dev`         | `tsx watch src/index.ts`, reloads on change     |
 | `npx tsc --noEmit`    | Typecheck (the config is `noEmit`, so `tsc` alone does the same) |
 | `npm run db:generate` | `prisma generate` — writes the client to `src/generated/prisma` (gitignored) |
-| `npm run db:migrate`  | `prisma migrate dev` — create and apply a migration, then run the seed |
+| `npm run db:migrate`  | `prisma migrate dev` — create and apply a migration (does **not** seed) |
 | `npm run db:seed`     | `tsx prisma/seed.ts` — provision the `SEED_ADMIN_EMAIL` admin |
 | `npm run db:studio`   | `prisma studio` — browse the database in a GUI  |
 
 Both sides must be running for the client to reach the API. Copy `server/.env.example` to
 `server/.env` and fill it in before starting the server — the `env` schema is parsed at import time,
 so the server will not boot without `DATABASE_URL`, `ALLOWED_EMAIL_DOMAIN`, `BETTER_AUTH_URL`,
-`ZOHO_ACCOUNTS_URL`, `ZOHO_CLIENT_ID` or `ZOHO_CLIENT_SECRET`. `PORT` is the one optional variable.
-`BETTER_AUTH_SECRET` is read by Better Auth itself and is not in the schema.
+`ZOHO_ACCOUNTS_URL`, `ZOHO_CLIENT_ID` or `ZOHO_CLIENT_SECRET`. `PORT` and `NODE_ENV` are the two
+optional variables, defaulting to `3000` and `development`. `BETTER_AUTH_SECRET` is read by Better
+Auth itself and is not in the schema.
 
 `prisma/seed.ts` provisions **one** bootstrap admin, from `SEED_ADMIN_EMAIL` and `SEED_ADMIN_NAME`.
 It solves the chicken-and-egg problem that sign-up is disabled, so without it nobody can log in at
 all. It is create-if-absent, not an upsert: an existing row is left untouched and logged as skipped,
 so re-running never clobbers the display name Zoho wrote on first sign-in. Both variables are
-required — either one missing fails the seed with exit code 1, which also surfaces as a failure at
-the end of `migrate dev`, since the seed runs after every migration via `prisma.config.ts`'s
-`migrations.seed`. An address outside `ALLOWED_EMAIL_DOMAIN` throws too, since it would produce a
-row that can never sign in.
+required — either one missing fails the seed with exit code 1. An address outside
+`ALLOWED_EMAIL_DOMAIN` throws too, since it would produce a row that can never sign in.
+
+**Seeding is always an explicit step under Prisma 7.** `prisma.config.ts` declares
+`migrations.seed`, but the only command that runs it is `prisma db seed`: neither `migrate dev` nor
+`migrate reset` seeds any more, unlike Prisma 6. So after a migration or a reset the database has no
+admin until you run the seed yourself — `npm run db:seed` in development, and the explicit second
+link of the e2e chain in tests (see Architecture). `db:seed` invokes `tsx prisma/seed.ts` directly
+rather than going through `prisma db seed`, so `migrations.seed` is effectively documentation of
+what the seed command is; keep the two in sync if you change either.
 
 Everyone else is added by hand: `npm run db:studio`, add a row to `user` with a UUID you generate
 for `id`, the person's `@dahnay.com` address, any `name` (Zoho overwrites it on first sign-in via
@@ -177,8 +205,35 @@ blocked by npm's `allowScripts` policy and there is no `postinstall` hook. Run `
 after cloning and after any schema change, otherwise `src/generated/prisma` is missing and the server
 fails to start.
 
-No test runner is configured. Testing lands in Phase 6 of the implementation plan; pick and wire up a
-runner when you get there rather than assuming one exists.
+**e2e/**
+
+| Command                          | Description                                              |
+| -------------------------------- | -------------------------------------------------------- |
+| `npm test`                       | `playwright test` — starts both servers (the API resets and seeds the test DB first), runs the suite |
+| `npm run test:ui`                | Playwright's watch-mode UI                                |
+| `npm run test:headed`            | Same run with a visible browser                           |
+| `npx tsc --noEmit`               | Typecheck (`e2e/tsconfig.json` covers the whole directory) |
+| `npx playwright install chromium`| Download the browser — required once after cloning        |
+
+Copy `e2e/.env.test.example` to `e2e/.env.test` first, or `test-env.ts` throws while the config
+loads. Everything test-related lives in this directory — no test scripts in `server/package.json` or
+`client/package.json`, and no `.env.test` under `server/`. See the e2e section under Architecture for
+how the run is wired.
+
+Playwright is the only runner here; unit tests are still unplanned. Testing is Phase 6 of the
+implementation plan, so the setup exists ahead of the tests on purpose.
+
+**.claude/**
+
+Two things here are committed and shared: `.claude/agents/security-reviewer.md`, a subagent scoped to
+this codebase (auth bypass, access control, the allowlist and mood-check-in privacy invariants
+below) — use it before landing anything that touches `auth.ts`, the middleware, or a new endpoint —
+and `.claude/skills/better-auth-best-practices/`, which carries the Better Auth setup guidance the
+`auth.ts` configuration follows.
+
+`.claude/settings.local.json` is machine-local and must not be committed. The repo `.gitignore` does
+**not** exclude it; it stays untracked only because of a global ignore rule on this machine, so add
+it to `.gitignore` if it ever shows up in `git status`.
 
 ## Architecture
 
@@ -188,8 +243,15 @@ proxies `/api` to the Express server, so client code uses relative paths with no
 goes through it (`api.get('/health')`). Preserve that — don't introduce absolute API URLs or a
 `VITE_API_URL`-style env var without also reworking the proxy.
 
-The API port is `3000` in `server/.env.example`, the `src/index.ts` default, the Vite proxy target,
-and `errorMessages.apiDisconnected` in `core/messages.ts`. Changing it means changing all four.
+The proxy target is `process.env.API_PROXY_TARGET ?? 'http://localhost:3000'`. That variable has no
+`VITE_` prefix on purpose: `vite.config.ts` is evaluated in Node, so it configures the dev server's
+proxy and is never inlined into the browser bundle. A `VITE_`-prefixed variable would reach client
+code and turn `api.ts` into an absolute cross-origin URL — third-party session cookie, a different
+CORS origin, and dev no longer matching prod. Override the target, never the client's `baseURL`.
+
+The API port is `3000` in `server/.env.example`, the `src/index.ts` default, the Vite proxy target's
+fallback, and `errorMessages.apiDisconnected` in `core/messages.ts`. Changing it means changing all
+four.
 
 Routing is client-side (`BrowserRouter`), and the Vite dev server serves `index.html` for unknown
 paths on its own. Whatever hosts the built client will have to do the same, or a refresh on `/login`
@@ -199,12 +261,22 @@ This is why `BETTER_AUTH_URL` is `http://localhost:5173`, **not** the API port: 
 browser sees, so every URL Better Auth derives from it — OAuth redirect URI, cookie domain, the CORS
 origin in `src/index.ts` — has to be the Vite one.
 
-**Middleware order in `server/src/index.ts` is load-bearing.** `app.all('/api/auth/*splat', ...)`
-must come *before* `app.use(express.json())`; Better Auth reads the raw request body itself, and a
-JSON parser that consumes it first leaves auth requests hanging with no error. The wildcard is
-Express 5's named form (`*splat`) — a bare `*` throws a path-to-regexp error at boot.
+**Middleware order in `server/src/index.ts` is load-bearing.** The chain is `cors` → `authRateLimit`
+on `/api/auth` → the Better Auth handler → `apiRateLimit` on `/api` → `express.json()` → routes, and
+three of those positions are constraints rather than preferences:
 
-**Two independent TypeScript programs, deliberately different.**
+- `app.all('/api/auth/*splat', ...)` must come *before* `app.use(express.json())`. Better Auth reads
+  the raw request body itself, and a JSON parser that consumes it first leaves auth requests hanging
+  with no error. The wildcard is Express 5's named form (`*splat`) — a bare `*` throws a
+  path-to-regexp error at boot.
+- `authRateLimit` must come *before* that same handler, since a limiter mounted after it never sees
+  the request. It is the one protecting the sign-in surface, so this is the ordering to check first
+  if you reshuffle the file.
+- `apiRateLimit` sits *after* the auth handler on purpose, so auth traffic is counted once rather
+  than against both budgets. Moved above it, a burst of sign-in attempts would also eat the general
+  `/api` allowance and start rejecting ordinary requests.
+
+**Three independent TypeScript programs, deliberately different.**
 
 - `server/` — ESM with `module: NodeNext`, `noEmit`, and strictness past `strict`:
   `noUncheckedIndexedAccess`, `noImplicitOverride`, `noUnusedLocals`, `noUnusedParameters`,
@@ -220,14 +292,26 @@ Express 5's named form (`*splat`) — a bare `*` throws a path-to-regexp error a
   resolve at runtime. It is declared a **third** time, in the root `tsconfig.json` — the one thing
   that config carries besides `references`. `tsc` ignores it (`files` is empty), but the shadcn CLI
   reads the root config to validate the alias and refuses to run without it. Keep all three in sync.
+- `e2e/` — ESM with `module: NodeNext`, `noEmit`, plain `strict`. No path aliases and no `core/*`
+  access: Playwright transpiles these files itself, so keeping them alias-free avoids a fourth place
+  the aliases have to agree. It has its own `typescript` devDependency so `npx tsc --noEmit` works
+  there. Relative imports still carry the `.js` extension per `NodeNext`
+  (`playwright.config.ts` imports `./test-env.js`); Playwright's loader maps it back to the `.ts`
+  file.
 
-Both set `verbatimModuleSyntax`, so type-only imports must be written `import type { ... }`.
+All three set `verbatimModuleSyntax`, so type-only imports must be written `import type { ... }`.
 
-**`core/` is shared source, compiled twice.** Two files so far:
+**`core/` is shared source, compiled twice.** Three files so far:
 
 - `core/messages.ts` — the single source of truth for messages: API error bodies, client error and
   status copy, console output, seed and env failures. Page content and labels are not messages and
   stay in the components; see the Conventions entry for where the line falls.
+- `core/constants.ts` — reusable non-message values, as `as const` objects. `roles` is the important
+  one: it mirrors the `Role` enum in `schema.prisma` so client code compares
+  `session.user.role === roles.admin` instead of a bare `'Admin'` literal. The client cannot import
+  the generated Prisma enum (it is server-only), and `erasableSyntaxOnly` bans declaring a real enum
+  here, so the `as const` object is the only shape that works on both sides — keep it and the schema
+  in step by hand. Constants go here, never in `messages.ts`.
 - `core/api-types.ts` — the request/response contract for `/api/*`. `HealthResponse` lives here and
   is applied on *both* ends: the client passes it to `api.get<HealthResponse>`, and the server types
   the handler's `res` as `Response<HealthResponse>`. That second half is the point — without it the
@@ -235,7 +319,7 @@ Both set `verbatimModuleSyntax`, so type-only imports must be written `import ty
   so a changed response body fails `tsc` on the server instead of surfacing as `undefined` in the
   browser.
 
-Both are plain `.ts` with no imports, no dependencies, no `package.json`, and no build step: each
+All three are plain `.ts` with no imports, no dependencies, no `package.json`, and no build step: each
 side simply pulls them into its own program through a `core/*` path alias. Because they compile
 under *both* tsconfigs, they have to satisfy the stricter of the two rules — no enums or parameter
 properties (client `erasableSyntaxOnly`), and nothing DOM- or Node-specific, since neither side's
@@ -269,8 +353,9 @@ under the same constraints.
   from `src/lib/api.ts` as the `queryFn` body. Always forward the query's `signal` to axios
   (`api.get('/health', { signal })`) so React Query can cancel in flight. Render off the
   `isPending`/`isSuccess`/`isError` flags — do not copy query results into local state, and do not
-  hand-roll a `{ state: 'checking' | 'ok' | 'error' }` union around a fetch, which is what
-  `HomePage.tsx` used to do. The shared `QueryClient` lives in `src/lib/query-client.ts` and is
+  hand-roll a `{ state: 'checking' | 'ok' | 'error' }` union around a fetch, which is what the health
+  check used to do before it became `ApiStatus.tsx`. The shared `QueryClient` lives in
+  `src/lib/query-client.ts` and is
   mounted by `main.tsx`; its defaults are `retry: false` (a failed call surfaces immediately instead
   of after three silent retries) and `staleTime: 30_000`. Override per query rather than editing the
   defaults for one call site.
@@ -294,6 +379,52 @@ otherwise, can notice it went stale. The only signal is a `window.addEventListen
 guarded on `event.persisted`, and this repo has deliberately chosen not to carry one: the button
 stays enabled and unlabelled-for-progress instead. The same trap applies to any future state set
 immediately before a redirect off-origin.
+
+**The e2e run is a second copy of the whole app, pointed at a throwaway database.** `e2e/.env.test`
+is the only place that describes it: `DATABASE_URL` on `intranet_test`, `PORT=3001`,
+`BETTER_AUTH_URL=http://localhost:5174`, `NODE_ENV=test`. `test-env.ts` is the only reader: it parses
+the file at config-load time and `playwright.config.ts` hands the values to the API web server as its
+`env`, which covers the reset, the seed and the server itself. Nothing about the run is configured in
+`server/` or `client/`.
+
+**Database setup is chained into the API's `command`, not a `globalSetup`.** Playwright starts
+`webServer` *before* `globalSetup` runs — `createGlobalSetupTasks` orders plugin setup ahead of the
+global setups — so a `globalSetup` that resets the database does it to a database the API is already
+attached to. The reset, the seed and the server are one `&&` chain in a single `command` instead,
+which is the only way to guarantee the ordering. Anything else that must happen before the app boots
+belongs in that chain too; there is no earlier hook.
+
+Six things are easy to break there:
+
+- **The API is started inline** — `npx prisma migrate reset --force && npx tsx prisma/seed.ts &&
+  npx tsx src/index.ts` with `cwd: '../server'` — rather than through a script in
+  `server/package.json`. That is deliberate: test concerns stay out of the application directories.
+  The chain gets its configuration from the web server's `env`, so there is no `--env-file` and no
+  path climbing back out to `../e2e/`.
+- **`prisma migrate reset` does not run the seed** under Prisma 7 — see the `migrations.seed` note
+  under Commands. The seed is the second link in the chain for that reason; drop it and the
+  allowlist is empty, so no test can ever sign in. `--skip-generate` no longer exists on that
+  command either.
+- **`PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION: 'Yes'` is in the API's `env`** and the run fails
+  without it whenever an agent starts it. Prisma 7 sniffs the environment for coding-agent markers
+  and aborts destructive migrate commands with a long "you are forbidden from performing this
+  action" message unless that variable is set. It is scoped to this one web server, whose
+  `DATABASE_URL` is `intranet_test` — never export it globally, and never add it to `server/.env`,
+  or the same guard stops protecting the development database.
+- **`reuseExistingServer` is `false` for the API**, unlike the client. Reusing an adopted server would
+  skip its `command`, and with it the reset and the seed, so a run would silently inherit whatever
+  the last one left in `intranet_test`. The cost is that a stale process on `3001` fails the run
+  instead of being adopted — kill it rather than turning the flag back on. The API's `timeout` is
+  raised to 180s to cover the reset and seed, and its `stdout` is piped so their progress is visible.
+- **`BETTER_AUTH_URL` must be the Vite port Playwright starts (`5174`), not the API's**, for the same
+  reason it is `5173` in development — it is the origin the browser sees.
+- **The Zoho credentials in `.env.test` are placeholders** and only exist to satisfy `env.ts`. A real
+  SSO round trip is not reachable from a test: the redirect URI is registered against `5173`. Tests
+  needing an authenticated session should seed a `user` row and forge the Better Auth session cookie,
+  not drive the provider.
+
+`globalTeardown` deliberately leaves `intranet_test` populated so a failure can be inspected; the
+next run's reset is what cleans it.
 
 **Mood check-in is a privacy constraint, not just a feature.** One submission per employee per day
 must be enforced *without* persisting any queryable link between an employee and their submission. No
@@ -321,6 +452,11 @@ so get it right when Phase 4 arrives; retrofitting it is not possible.
   When it is genuinely ambiguous, leave the string inline. Pulling a string out later is a two-line
   change; a `core/` full of page copy is not.
 
+  There is a third bucket: a string that is neither a message nor page copy because **both sides
+  have to agree on its exact value** — `roles.admin`, `apiStatusLabels.ok`. Those are constants and
+  go in `core/constants.ts`, not `messages.ts`. The test is whether a typo would break a comparison
+  rather than just read badly.
+
   Messages are named exports grouped by audience: `apiMessages` (HTTP error bodies), `errorMessages`
   and `statusMessages` (client-facing), `serverMessages` and `seedMessages` (operator-facing). Add
   new entries to an existing group rather than inventing parallel ones. Anything with an
@@ -331,14 +467,15 @@ so get it right when Phase 4 arrives; retrofitting it is not possible.
   string moves into `core/`, and `apiMessages.accessDenied` is deliberately terser than
   `errorMessages.accessDenied` — per the allowlist notes above, the server must not let an outsider
   distinguish "unprovisioned" from "wrong domain".
-- **Do not write code comments in `client/` or `server/`.** No explanatory comments, no section
-  banners, no JSDoc, no `// TODO`. Names and types carry the intent; if a line needs a comment to be
-  understood, rename or restructure it instead. This applies to every file you add or edit under
-  `client/` and `server/`, including config files (`vite.config.ts`, `tsconfig*.json`,
-  `prisma.config.ts`) and `prisma/schema.prisma`. Non-obvious decisions — security constraints,
-  ordering that is load-bearing, upstream bugs worked around — belong in this file or in `docs/`,
-  not in the source. The one exception is a comment the tooling itself requires (for example a
-  targeted oxlint suppression).
+- **Do not write code comments in `client/`, `server/` or `e2e/`.** No explanatory comments, no
+  section banners, no JSDoc, no `// TODO`. Names and types carry the intent; if a line needs a comment
+  to be understood, rename or restructure it instead. This applies to every file you add or edit under
+  those three directories, including config files (`vite.config.ts`, `tsconfig*.json`,
+  `prisma.config.ts`, `playwright.config.ts`) and `prisma/schema.prisma`. `.env.example` files are not
+  code and are commented normally. Non-obvious decisions — security constraints, ordering that is
+  load-bearing, upstream bugs worked around — belong in this file or in `docs/`, not in the source.
+  The one exception is a comment the tooling itself requires (for example a targeted oxlint
+  suppression).
 - **Styling is Tailwind v4 utilities plus shadcn/ui — no hand-written CSS.** There are no `.css`
   files next to components, no CSS modules and no inline `style` props; `client/src/index.css` is
   the only stylesheet, and it holds only what shadcn's `init` generated (imports, `@theme inline`
@@ -393,5 +530,7 @@ so get it right when Phase 4 arrives; retrofitting it is not possible.
   on `dev`; `main` is the release branch and is updated from `dev`, not from anything else. If a task
   seems to call for a branch, split it into smaller commits on `dev` instead.
 - PRs follow [.github/pull_request_template.md](./.github/pull_request_template.md).
-- `.env` files are gitignored; only `.env.example` is committed. Document every new server variable
-  there.
+- `.env` files are gitignored; only `.env.example` and `e2e/.env.test.example` are committed — the
+  second needs its own `!` negation in `.gitignore`, since the blanket `.env.*` rule would otherwise
+  swallow it. Document every new server variable in both, unless it is genuinely irrelevant to the
+  e2e run.
