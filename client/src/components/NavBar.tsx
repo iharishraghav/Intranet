@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { signOut, useSession } from '@/lib/auth-client'
 
-function NavBar() {
+export default function NavBar() {
   const { data: session } = useSession()
   const navigate = useNavigate()
   const [signingOut, setSigningOut] = useState(false)
@@ -43,5 +43,3 @@ function NavBar() {
     </header>
   )
 }
-
-export default NavBar
