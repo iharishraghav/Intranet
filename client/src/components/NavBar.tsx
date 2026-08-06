@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router'
 
+import ApiStatus from '@/components/ApiStatus'
 import { Button } from '@/components/ui/button'
 import { signOut, useSession } from '@/lib/auth-client'
 import { roles } from 'core/constants'
@@ -36,6 +37,7 @@ export default function NavBar() {
         </Link>
 
         <div className="flex items-center gap-3">
+          {isAdmin && <ApiStatus />}
           {showAdminLink && (
             <Button variant="ghost" size="sm" nativeButton={false} render={<Link to="/admin" />}>
               Admin dashboard
