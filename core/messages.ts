@@ -2,6 +2,7 @@ export const apiMessages = {
   accessDenied: 'Access denied.',
   unauthorized: 'Unauthorized',
   forbidden: 'Forbidden',
+  tooManyRequests: 'Too many requests. Please try again later.',
 } as const
 
 export const errorMessages = {
