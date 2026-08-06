@@ -4,8 +4,8 @@ import { toNodeHandler } from 'better-auth/node';
 import cors from 'cors';
 import express from 'express';
 
-import type { HealthResponse } from '@core/api-types.js';
-import { serverMessages } from '@core/messages.js';
+import type { HealthResponse } from 'core/api-types.js';
+import { serverMessages } from 'core/messages.js';
 
 import { auth } from './lib/auth.js';
 import { env } from './lib/env.js';

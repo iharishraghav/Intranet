@@ -2,7 +2,7 @@ import 'dotenv/config';
 
 import * as z from 'zod';
 
-import { serverMessages } from '@core/messages.js';
+import { serverMessages } from 'core/messages.js';
 
 const envSchema = z.object({
   PORT: z.preprocess(

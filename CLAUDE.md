@@ -209,7 +209,7 @@ Express 5's named form (`*splat`) — a bare `*` throws a path-to-regexp error a
 - `server/` — ESM with `module: NodeNext`, `noEmit`, and strictness past `strict`:
   `noUncheckedIndexedAccess`, `noImplicitOverride`, `noUnusedLocals`, `noUnusedParameters`,
   `noFallthroughCasesInSwitch`. Indexed access yields `T | undefined` — write code that satisfies
-  that rather than loosening the config. `src/*` and `@core/*` path aliases are configured, and
+  that rather than loosening the config. `src/*` and `core/*` path aliases are configured, and
   `include` covers `prisma.config.ts` and `prisma/seed.ts` so the seed can import through them, plus
   `../core`. Relative imports carry the `.js` extension, per `NodeNext`.
 - `client/` — solution-style `tsconfig.json` referencing `tsconfig.app.json` (app source, `noEmit`,
@@ -236,23 +236,25 @@ Both set `verbatimModuleSyntax`, so type-only imports must be written `import ty
   browser.
 
 Both are plain `.ts` with no imports, no dependencies, no `package.json`, and no build step: each
-side simply pulls them into its own program through an `@core/*` path alias. Because they compile
+side simply pulls them into its own program through a `core/*` path alias. Because they compile
 under *both* tsconfigs, they have to satisfy the stricter of the two rules — no enums or parameter
 properties (client `erasableSyntaxOnly`), and nothing DOM- or Node-specific, since neither side's
 `lib`/`types` covers the other's.
 
 The wiring is five entries across four files, and all of it is load-bearing:
 
-- `server/tsconfig.json` — `paths` maps `@core/*` → `../core/*`, and `include` lists `../core`.
-  Imports carry the `.js` extension (`@core/messages.js`) like every other server import, per
+- `server/tsconfig.json` — `paths` maps `core/*` → `../core/*`, and `include` lists `../core`.
+  Imports carry the `.js` extension (`core/messages.js`) like every other server import, per
   `NodeNext`; `tsx` resolves the alias at runtime, the same way `prisma/seed.ts` already imports
   through `src/*`.
 - `client/tsconfig.app.json` — same `paths` entry plus `../core` in `include`. Client imports have
-  **no** extension (`@core/messages`), per bundler resolution.
+  **no** extension (`core/messages`), per bundler resolution.
 - `client/tsconfig.json` — the alias's third declaration, for the shadcn CLI, as with `@/*`.
-- `client/vite.config.ts` — `resolve.alias`, where **`'@core'` must be listed before `'@'`**. Vite
-  matches string aliases by prefix in declaration order, so `'@'` first would rewrite
-  `@core/messages` to `src/core/messages` and fail.
+- `client/vite.config.ts` — `resolve.alias`. The alias is bare `core`, not `@core`, matching the
+  server's bare `src/*`. That puts it in the same namespace as npm packages: Vite and TypeScript both
+  resolve the alias first, so a future dependency actually named `core` would be unreachable. Only an
+  exact `core` or a `core/`-prefixed specifier is rewritten, so package names like `core-js` are
+  unaffected.
 - `client/vite.config.ts` — `server.fs.allow`, which the dev server needs to serve a file from
   outside `client/` over `/@fs`. Setting it *replaces* Vite's default, so the client directory is
   listed explicitly alongside `../core`. Keep it to those two: the blunter `allow: ['..']` would also

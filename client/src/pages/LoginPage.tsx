@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card'
 import { signIn, useSession } from '@/lib/auth-client'
 import { useSignInStore } from '@/stores/sign-in-store'
-import { errorMessages } from '@core/messages'
+import { errorMessages } from 'core/messages'
 
 export default function LoginPage() {
   const { data: session, isPending } = useSession()

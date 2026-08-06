@@ -9,7 +9,7 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
-      '@core': fileURLToPath(new URL('../core', import.meta.url)),
+      'core': fileURLToPath(new URL('../core', import.meta.url)),
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },

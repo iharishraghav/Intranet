@@ -2,7 +2,7 @@ import type { NextFunction, Request, Response } from 'express';
 
 import { fromNodeHeaders } from 'better-auth/node';
 
-import { apiMessages } from '@core/messages.js';
+import { apiMessages } from 'core/messages.js';
 
 import { auth } from '../lib/auth.js';
 

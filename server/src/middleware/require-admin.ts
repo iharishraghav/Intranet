@@ -1,6 +1,6 @@
 import type { NextFunction, Request, Response } from 'express';
 
-import { apiMessages } from '@core/messages.js';
+import { apiMessages } from 'core/messages.js';
 
 import { Role } from '../generated/prisma/client.js';
 import { requireAuth } from './require-auth.js';

@@ -3,8 +3,8 @@ import { useQuery } from '@tanstack/react-query'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { api } from '@/lib/api'
 import { useSession } from '@/lib/auth-client'
-import type { HealthResponse } from '@core/api-types'
-import { errorMessages, statusMessages } from '@core/messages'
+import type { HealthResponse } from 'core/api-types'
+import { errorMessages, statusMessages } from 'core/messages'
 
 export default function HomePage() {
   const { data: session } = useSession()

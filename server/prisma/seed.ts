@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import * as z from 'zod';
 
-import { seedMessages } from '@core/messages.js';
+import { seedMessages } from 'core/messages.js';
 
 import { prisma } from 'src/db.js';
 import { Role } from 'src/generated/prisma/client.js';

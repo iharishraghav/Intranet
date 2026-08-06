@@ -3,7 +3,7 @@ import { prismaAdapter } from 'better-auth/adapters/prisma';
 import { APIError } from 'better-auth/api';
 import { genericOAuth } from 'better-auth/plugins/generic-oauth';
 
-import { apiMessages } from '@core/messages.js';
+import { apiMessages } from 'core/messages.js';
 
 import { prisma } from '../db.js';
 import { Role } from '../generated/prisma/client.js';
