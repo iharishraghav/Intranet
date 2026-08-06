@@ -8,4 +8,4 @@
   - Database: Azure Database for PostgreSQL
   - File storage (resources): Azure Blob Storage
   - Scheduled jobs: Azure Functions (timer trigger)
-- Authentication: Zoho SSO
+- Authentication: Better Auth, with Zoho SSO as the OIDC provider
