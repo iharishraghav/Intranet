@@ -9,11 +9,18 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
+      '@core': fileURLToPath(new URL('../core', import.meta.url)),
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
   server: {
     port: 5173,
+    fs: {
+      allow: [
+        fileURLToPath(new URL('.', import.meta.url)),
+        fileURLToPath(new URL('../core', import.meta.url)),
+      ],
+    },
     proxy: {
       '/api': {
         target: 'http://localhost:3000',

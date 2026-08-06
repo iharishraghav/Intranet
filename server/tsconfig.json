@@ -35,8 +35,9 @@
 
     // Path Aliases
     "paths": {
-      "src/*": ["./src/*"]
+      "src/*": ["./src/*"],
+      "@core/*": ["../core/*"]
     }
   },
-  "include": ["src", "prisma.config.ts"]
+  "include": ["src", "prisma.config.ts", "prisma/seed.ts", "../core"]
 }
