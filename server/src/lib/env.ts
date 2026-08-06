@@ -5,6 +5,10 @@ import * as z from 'zod';
 import { serverMessages } from 'core/messages.js';
 
 const envSchema = z.object({
+  NODE_ENV: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.enum(['development', 'test', 'production']).default('development'),
+  ),
   PORT: z.preprocess(
     (value) => (value === '' ? undefined : value),
     z.coerce.number().int().positive().default(3000),
