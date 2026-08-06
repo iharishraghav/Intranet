@@ -1,12 +1,17 @@
 import { defineConfig, devices } from '@playwright/test';
 
+import { testEnv } from './test-env.js';
+
 const API_PORT = 3001;
 const CLIENT_PORT = 5174;
 const CLIENT_URL = `http://localhost:${CLIENT_PORT}`;
 
+const resetDatabase = 'npx prisma migrate reset --force';
+const seedDatabase = 'npx tsx prisma/seed.ts';
+const startApi = 'npx tsx src/index.ts';
+
 export default defineConfig({
   testDir: './tests',
-  globalSetup: './global-setup.ts',
   globalTeardown: './global-teardown.ts',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
@@ -26,10 +31,13 @@ export default defineConfig({
   webServer: [
     {
       name: 'api',
-      command: 'npx tsx --env-file=../e2e/.env.test src/index.ts',
+      command: `${resetDatabase} && ${seedDatabase} && ${startApi}`,
       cwd: '../server',
+      env: { ...testEnv, PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION: 'Yes' },
       url: `http://localhost:${API_PORT}/api/health`,
-      reuseExistingServer: !process.env.CI,
+      timeout: 180_000,
+      stdout: 'pipe',
+      reuseExistingServer: false,
     },
     {
       name: 'client',
