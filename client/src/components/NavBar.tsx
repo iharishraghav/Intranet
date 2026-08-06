@@ -13,7 +13,8 @@ export default function NavBar() {
   const [signingOut, setSigningOut] = useState(false)
 
   const isAdmin = session?.user.role === roles.admin
-  const showAdminLink = isAdmin && pathname !== '/admin'
+  const isAdminPage = pathname === '/admin'
+  const showAdminLink = isAdmin && !isAdminPage
 
   async function handleSignOut() {
     setSigningOut(true)
@@ -37,7 +38,7 @@ export default function NavBar() {
         </Link>
 
         <div className="flex items-center gap-3">
-          {isAdmin && <ApiStatus />}
+          {isAdmin && isAdminPage && <ApiStatus />}
           {showAdminLink && (
             <Button variant="ghost" size="sm" nativeButton={false} render={<Link to="/admin" />}>
               Admin dashboard
